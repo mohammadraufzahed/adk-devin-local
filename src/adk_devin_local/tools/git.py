@@ -35,11 +35,10 @@ class GitTools(CliTools):
     def git_show(self, ref: str = "HEAD", path: str = "") -> str:
         """Show a commit or a file at a commit."""
         if ref.startswith("-") or ".." in ref: return "Invalid git ref."
-        args=["git","show",ref]
         if path:
             if Path(path).is_absolute() or ".." in Path(path).parts:return "Rejected path outside workspace."
-            args.append("--"+path)
-        return self._run(args)
+            ref = f"{ref}:{path}"
+        return self._run(["git", "show", ref])
 
     def git_blame(self, path: str, start: int = 0, end: int = 0) -> str:
         """Show line authorship for a repository file."""

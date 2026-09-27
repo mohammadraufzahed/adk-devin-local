@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from google.genai import types
 
 from adk_devin_local import DevinLocal, GROUPS, build_tools, build_subagent_tools
 from adk_devin_local.tools.files import FileTools
+from adk_devin_local.tools.git import GitTools
 from adk_devin_local.tools.memory import MemoryTools
 from adk_devin_local.tools.cron import CronTools
 from adk_devin_local.tools.wiki import WikiTools
@@ -36,6 +38,21 @@ def test_child_agents_are_adk_tools(tmp_path):
     assert len(children)==3
     agent=LlmAgent(name="parent",model=DevinLocal(model="swe-2-high"),tools=children)
     assert agent.tools
+
+
+def test_git_show_file_path(tmp_path):
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    git("config", "user.email", "test@example.invalid")
+    git("config", "user.name", "Test")
+    (tmp_path / "sample.txt").write_text("git show path works")
+    git("add", "sample.txt")
+    git("commit", "-qm", "fixture")
+    result = json.loads(GitTools(tmp_path).git_show("HEAD", "sample.txt"))
+    assert result["exit_code"] == 0
+    assert result["output"] == "git show path works"
 
 
 def test_file_operations_and_root_confinement(tmp_path):
@@ -128,6 +145,79 @@ async def test_webwatch_uses_feedparser(monkeypatch, tmp_path):
     tools._save("feeds.json", [{"url": "https://example.com/feed.xml", "name": "Example"}])
     items = await tools.webwatch_check()
     assert items == [{"feed": "Example", "title": "Entry", "link": "https://example.com/entry"}]
+
+
+@pytest.mark.asyncio
+async def test_telegram_tool_methods_dispatch_to_library_client(monkeypatch):
+    from adk_devin_local.tools.telegram import TelegramTools
+
+    tools = TelegramTools()
+    tools.allow_mutations = True
+    tools.chat = "123"
+    calls = []
+
+    async def fake_call(method, payload, **kwargs):
+        calls.append((method, payload, kwargs))
+        return {"ok": True}
+
+    monkeypatch.setattr(tools, "_tg", fake_call)
+    assert (await tools.tg_send("hello"))["ok"]
+    assert (await tools.tg_react(1, "👍"))["ok"]
+    assert (await tools.tg_pin(1))["ok"]
+    assert (await tools.tg_edit(1, "updated"))["ok"]
+    assert (await tools.tg_delete(1))["ok"]
+    assert (await tools.tg_unpin())["ok"]
+    assert [method for method, _, _ in calls] == [
+        "sendMessage", "setMessageReaction", "pinChatMessage",
+        "editMessageText", "deleteMessage", "unpinChatMessage",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_voice_transcription_uses_async_openai_client(monkeypatch):
+    from types import SimpleNamespace
+    from adk_devin_local.tools import voice
+    from adk_devin_local.tools.voice import VoiceTools
+
+    class FakeTranscriptions:
+        async def create(self, **kwargs):
+            assert kwargs["model"] == "whisper-1"
+            assert kwargs["file"][0] == "clip.wav"
+            return SimpleNamespace(text="transcribed")
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            assert kwargs["api_key"] == "test-key"
+            self.audio = SimpleNamespace(transcriptions=FakeTranscriptions())
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_args): return None
+
+    tools = VoiceTools()
+    async def file_data(_file_id): return ("clip.wav", b"audio")
+    monkeypatch.setattr(tools, "_telegram_file", file_data)
+    monkeypatch.setattr(voice, "AsyncOpenAI", FakeClient)
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    assert await tools.tg_transcribe("file-id") == {"text": "transcribed"}
+
+
+@pytest.mark.asyncio
+async def test_jev_choice_service_with_mocked_endpoint(monkeypatch):
+    from adk_devin_local.tools import jev
+    from adk_devin_local.tools.jev import JevTools
+
+    class FakeResponse:
+        def raise_for_status(self): pass
+        def json(self): return {"answers": {"pick": {"choice": "item_2", "confidence": 0.9}}}
+
+    class FakeClient:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_args): return None
+        async def post(self, *args, **kwargs): return FakeResponse()
+
+    monkeypatch.setattr(jev.httpx, "AsyncClient", lambda **_kwargs: FakeClient())
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    assert (await JevTools().jev_pick("best", ["a", "b"]))["picked"] == "b"
 
 
 @pytest.mark.asyncio
