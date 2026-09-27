@@ -5,14 +5,19 @@ import os
 from typing import Any
 import httpx
 
-class JevTools:
+from .env import EnvOverlay
+
+class JevTools(EnvOverlay):
+    def __init__(self, env: dict[str, str] | None = None):
+        self.env = dict(env or {})
+
     async def _jev(self, instructions: str, candidates: dict[str,str], state: str) -> Any:
-        key=os.environ.get("OPENROUTER_API_KEY")
+        key=self._e("OPENROUTER_API_KEY")
         if not key:return {"error":"OPENROUTER_API_KEY not configured; decision service unavailable."}
         async with httpx.AsyncClient(timeout=20) as client:
             response=await client.post("https://openrouter.ai/api/alpha/decisions",
                 headers={"Authorization":f"Bearer {key}","X-Title":"adk-devin-local","Content-Type":"application/json"},
-                json={"model":os.environ.get("OPENROUTER_MODEL","typesafe/jev-1.13"),"state":{"message":state[:2000]},
+                json={"model":self._e("OPENROUTER_MODEL","typesafe/jev-1.13"),"state":{"message":state[:2000]},
                       "questions":{"pick":{"type":"choice","instructions":instructions[:1000],"criteria":candidates}}})
             response.raise_for_status(); body=response.json()
         answer=next(iter((body.get("answers") or {}).values()),{})

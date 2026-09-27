@@ -9,16 +9,19 @@ from typing import Any
 import docker
 from docker.errors import APIError, DockerException, NotFound
 
+from .env import EnvOverlay
 
-class DockerTools:
-    def __init__(self, root: str | os.PathLike[str]):
+
+class DockerTools(EnvOverlay):
+    def __init__(self, root: str | os.PathLike[str], env: dict[str, str] | None = None):
         self.root = root
+        self.env = dict(env or {})
         self.allow_mutations = os.environ.get("ADK_DEVIN_ALLOW_MUTATIONS") == "1"
         self._client: docker.DockerClient | None = None
 
     def _docker(self) -> docker.DockerClient:
         if self._client is None:
-            self._client = docker.from_env()
+            self._client = docker.from_env(environment=self._merged_env())
         return self._client
 
     @staticmethod

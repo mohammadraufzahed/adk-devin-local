@@ -15,7 +15,7 @@ class TelegramTools(TelegramApi):
         if not chat: return {"error":"Set TG_CHAT or pass chat_id."}
         payload: dict[str, Any] = {"chat_id":chat,"text":text[:4000]}
         if reply_to: payload["reply_to_message_id"]=reply_to
-        topic=thread_id or int(os.environ.get("TG_THREAD","0") or 0)
+        topic=thread_id or int(self._e("TG_THREAD","0") or 0)
         if topic: payload["message_thread_id"]=topic
         return await self._tg("sendMessage",payload)
 
@@ -63,13 +63,13 @@ class TelegramTools(TelegramApi):
 
     async def tg_history(self, query: str, limit: int = 20) -> Any:
         """Search the host's Telegram journal through its PI_TEAM_DIR mailbox."""
-        directory=os.environ.get("PI_TEAM_DIR")
+        directory=self._e("PI_TEAM_DIR")
         if not directory: return {"error":"PI_TEAM_DIR not configured; Telegram journal is host-owned."}
         import uuid
         reqdir=Path(directory)/"requests"; repdir=Path(directory)/"replies"
         reqdir.mkdir(parents=True,exist_ok=True); repdir.mkdir(parents=True,exist_ok=True)
         rid=uuid.uuid4().hex
-        request={"id":rid,"from":os.environ.get("PI_TEAM_FROM","adk"),"to":"host","kind":"tg_history","text":json.dumps({"query":query,"limit":max(1,min(limit,100))}),"at":time.time()}
+        request={"id":rid,"from":self._e("PI_TEAM_FROM","adk"),"to":"host","kind":"tg_history","text":json.dumps({"query":query,"limit":max(1,min(limit,100))}),"at":time.time()}
         (reqdir/f"{rid}.json").write_text(json.dumps(request))
         deadline=time.monotonic()+30
         while time.monotonic()<deadline:

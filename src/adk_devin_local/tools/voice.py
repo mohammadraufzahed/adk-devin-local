@@ -27,7 +27,7 @@ class VoiceTools(TelegramApi):
         with tempfile.TemporaryDirectory(prefix="adk-voice-") as directory:
             output = Path(directory) / "speech.mp3"
             try:
-                voice = os.environ.get("EDGE_TTS_VOICE", "fa-IR-DilaraNeural")
+                voice = self._e("EDGE_TTS_VOICE", "fa-IR-DilaraNeural")
                 await edge_tts.Communicate(text, voice=voice).save(str(output))
             except Exception as exc:
                 # Keep the local speech engine as an offline fallback.
@@ -41,22 +41,22 @@ class VoiceTools(TelegramApi):
                 if proc.returncode:
                     return {"error": proc.stderr[-500:]}
             payload: dict[str, Any] = {"chat_id": chat}
-            topic = thread_id or int(os.environ.get("TG_THREAD", "0") or 0)
+            topic = thread_id or int(self._e("TG_THREAD", "0") or 0)
             if topic:
                 payload["message_thread_id"] = topic
             return await self._tg("sendVoice", payload, file_key="voice", file_path=str(output))
 
     async def tg_transcribe(self, file_id: str, language: str = "fa") -> Any:
         """Download Telegram audio and transcribe it with the OpenAI async SDK."""
-        api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        api_key = self._e("GROQ_API_KEY") or self._e("OPENAI_API_KEY")
         if not api_key:
             return {"error": "Set GROQ_API_KEY or OPENAI_API_KEY for transcription."}
         audio = await self._telegram_file(file_id)
         if isinstance(audio, dict):
             return audio
         filename, content = audio
-        groq = bool(os.environ.get("GROQ_API_KEY"))
-        model = os.environ.get("GROQ_STT_MODEL", "whisper-large-v3-turbo") if groq else "whisper-1"
+        groq = bool(self._e("GROQ_API_KEY"))
+        model = self._e("GROQ_STT_MODEL", "whisper-large-v3-turbo") if groq else "whisper-1"
         base_url = "https://api.groq.com/openai/v1" if groq else None
         try:
             async with AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=90) as client:

@@ -7,12 +7,17 @@ import subprocess
 from pathlib import Path
 
 
-class CodeGraphTools:
-    def __init__(self, root: str | Path): self.root = Path(root).expanduser().resolve(strict=True)
+from .env import EnvOverlay
+
+
+class CodeGraphTools(EnvOverlay):
+    def __init__(self, root: str | Path, env: dict[str, str] | None = None):
+        self.root = Path(root).expanduser().resolve(strict=True)
+        self.env = dict(env or {})
     def _run(self, *args: str, timeout: int = 120) -> str:
         if not shutil.which("codegraph"): return "codegraph CLI not installed (npm i -g @colbymchenry/codegraph)."
         try:
-            proc=subprocess.run(["codegraph", *args], cwd=self.root, capture_output=True, text=True, timeout=timeout)
+            proc=subprocess.run(["codegraph", *args], cwd=self.root, env=self._merged_env(), capture_output=True, text=True, timeout=timeout)
             out=(proc.stdout + ("\n"+proc.stderr if proc.stderr else "")).strip()
             return f"exit {proc.returncode}\n{out[:16000]}"
         except subprocess.TimeoutExpired: return f"codegraph {args[0]} timed out."

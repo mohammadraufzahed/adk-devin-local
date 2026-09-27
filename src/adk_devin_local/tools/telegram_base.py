@@ -9,11 +9,14 @@ from telegram import Bot, ReactionTypeEmoji
 from telegram.error import TelegramError
 from telegram.request import HTTPXRequest
 
+from .env import EnvOverlay
 
-class TelegramApi:
-    def __init__(self):
-        self.token = os.environ.get("TG_BOT_TOKEN") or os.environ.get("TELEGRAM_BOT_TOKEN", "")
-        self.chat = os.environ.get("TG_CHAT") or os.environ.get("TELEGRAM_CHAT_ID", "")
+
+class TelegramApi(EnvOverlay):
+    def __init__(self, env: dict[str, str] | None = None):
+        self.env = dict(env or {})
+        self.token = self._e("TG_BOT_TOKEN") or self._e("TELEGRAM_BOT_TOKEN", "")
+        self.chat = self._e("TG_CHAT") or self._e("TELEGRAM_CHAT_ID", "")
         self.allow_mutations = os.environ.get("ADK_DEVIN_ALLOW_MUTATIONS") == "1"
 
     def _write_gate(self) -> dict[str, str] | None:

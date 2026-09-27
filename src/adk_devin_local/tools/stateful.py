@@ -4,10 +4,13 @@ import json, os, time, uuid
 from pathlib import Path
 from typing import Any
 
-class StatefulTools:
-    def __init__(self, root: str | Path, state_dir: str | Path | None = None):
+from .env import EnvOverlay
+
+class StatefulTools(EnvOverlay):
+    def __init__(self, root: str | Path, state_dir: str | Path | None = None, env: dict[str, str] | None = None):
+        self.env = dict(env or {})
         self.root = Path(root).expanduser().resolve(strict=True)
-        self.state = Path(state_dir or os.environ.get("ADK_DEVIN_STATE_DIR", self.root / ".adk-devin")).expanduser().resolve()
+        self.state = Path(state_dir or self._e("ADK_DEVIN_STATE_DIR", self.root / ".adk-devin")).expanduser().resolve()
         self.state.mkdir(parents=True, exist_ok=True)
 
     def _load(self, name: str, default: Any) -> Any:
@@ -23,12 +26,12 @@ class StatefulTools:
         os.replace(temp, path)
 
     async def _mailbox_request(self, kind: str, text: str, timeout: int) -> str:
-        directory=os.environ.get("PI_TEAM_DIR")
+        directory=self._e("PI_TEAM_DIR")
         if not directory:return f"PI_TEAM_DIR is not configured; cannot query host {kind}."
         target=Path(directory); reqdir=target/"requests"; repdir=target/"replies"
         reqdir.mkdir(parents=True,exist_ok=True); repdir.mkdir(parents=True,exist_ok=True)
         rid=uuid.uuid4().hex
-        request={"id":rid,"from":os.environ.get("PI_TEAM_FROM","adk"),"to":"host","kind":kind,"text":text,"at":time.time()}
+        request={"id":rid,"from":self._e("PI_TEAM_FROM","adk"),"to":"host","kind":kind,"text":text,"at":time.time()}
         (reqdir/f"{rid}.json").write_text(json.dumps(request),encoding="utf-8")
         import asyncio
         deadline=time.monotonic()+timeout

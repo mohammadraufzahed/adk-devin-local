@@ -67,7 +67,7 @@ def build_tools(workspace: str | Path, groups: list[str] | tuple[str, ...] | Non
         raise ValueError(f"Unknown plugin groups: {', '.join(sorted(unknown))}")
     root = Path(workspace).expanduser().resolve(strict=True)
     stateful = {
-        name: factory(root)
+        name: factory(root, env=env)
         for name, factory in {
             "pi-blackboard": BlackboardTools,
             "pi-cron": CronTools,
@@ -81,15 +81,15 @@ def build_tools(workspace: str | Path, groups: list[str] | tuple[str, ...] | Non
     tools: dict[str, Any] = {
         "files": FileTools(root),
         "pi-git": GitTools(root, env=env),
-        "pi-docker": DockerTools(root),
+        "pi-docker": DockerTools(root, env=env),
         "pi-devbox": DevboxTools(root, env=env),
         "pi-gh": GithubTools(root, env=env),
         "pi-deps": DependencyTools(root, env=env),
-        "pi-codegraph": CodeGraphTools(root),
+        "pi-codegraph": CodeGraphTools(root, env=env),
         "pi-websearch": type("WebSearchTools", (), {"web_search": staticmethod(web_search), "web_fetch": staticmethod(web_fetch)})(),
-        "pi-telegram": TelegramTools(),
-        "pi-voice": VoiceTools(),
-        "pi-jev": JevTools(),
+        "pi-telegram": TelegramTools(env=env),
+        "pi-voice": VoiceTools(env=env),
+        "pi-jev": JevTools(env=env),
         "pi-subagents": None,
         **stateful,
     }

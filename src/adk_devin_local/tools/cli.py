@@ -4,7 +4,9 @@ import json, os, shutil, subprocess
 from pathlib import Path
 from typing import Any
 
-class CliTools:
+from .env import EnvOverlay
+
+class CliTools(EnvOverlay):
     def __init__(self, root: str | Path, env: dict[str, str] | None = None):
         self.root = Path(root).expanduser().resolve(strict=True)
         # Per-run env overlay (e.g. soul identity: GH_TOKEN, PI_TEAM_*,
