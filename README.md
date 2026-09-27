@@ -65,12 +65,23 @@ print(model_uids())
 - No automatic retries; API use may incur account usage/charges.
 - Tests use mocked protocol responses. A real model call is opt-in and can consume paid usage.
 
-## Test
+## Test and benchmark
 
 ```bash
-python -m pip install -e '.[test]'
-pytest
+uv sync --extra test
+uv run pytest
 ```
+
+A manual, live comparison harness runs identical arithmetic, JSON-formatting,
+and Python coding prompts through ADK and Pi for SWE-1.6 and SWE-2. It can use
+paid quota; run only when intended:
+
+```bash
+uv run python benchmarks/compare.py
+```
+
+The script prints only final answers, deterministic scores, timings, and token
+usage; it does not persist model transcripts or reasoning traces.
 
 ## License and attribution
 
