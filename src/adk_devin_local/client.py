@@ -69,7 +69,14 @@ def _pack_tool(tool: Any) -> bytes:
     if not declaration: return b""
     chunks = []
     for fn in declaration:
-        parameters = fn.parameters.model_dump(exclude_none=True, by_alias=True) if fn.parameters else {}
+        if fn.parameters:
+            parameters = fn.parameters.model_dump(exclude_none=True, by_alias=True)
+        elif getattr(fn, "parameters_json_schema", None):
+            # google-adk >= 2.9 populates parameters_json_schema instead of
+            # parameters when JSON_SCHEMA_FOR_FUNC_DECL is enabled.
+            parameters = fn.parameters_json_schema
+        else:
+            parameters = {}
         chunks.append(blob(10, text(1, fn.name or "") + text(2, fn.description or "") + text(3, json.dumps(parameters))))
     return b"".join(chunks)
 

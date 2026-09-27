@@ -40,3 +40,49 @@ def test_decode_tool_argument_delta_without_call_id():
         ("tool_args", ("call-1", '{"q":')),
     ]
     assert _decode_chat_frame(continuation) == [("tool_args", (None, '"x"}'))]
+
+
+def test_pack_tool_uses_parameters_json_schema_when_parameters_is_none():
+    """google-adk>=2.9 sets parameters_json_schema, leaving parameters=None."""
+    import json as _json
+    from google.genai import types
+    from adk_devin_local.client import _pack_tool
+
+    schema = {
+        "type": "object",
+        "properties": {"number": {"type": "integer"}},
+        "required": ["number"],
+    }
+    fn = types.FunctionDeclaration(
+        name="gh_issue_view",
+        description="View an issue",
+        parameters_json_schema=schema,
+    )
+    tool = types.Tool(function_declarations=[fn])
+    packed = _pack_tool(tool)
+    blobs = [v for n, w, v in fields(packed) if n == 10 and isinstance(v, bytes)]
+    assert blobs, "expected one packed function declaration"
+    inner = {n: v for n, w, v in fields(blobs[0]) if w == 2}
+    assert inner[1].decode() == "gh_issue_view"
+    sent = _json.loads(inner[3].decode())
+    assert sent["required"] == ["number"]
+    assert "number" in sent["properties"]
+
+
+def test_pack_tool_prefers_parameters_over_json_schema():
+    import json as _json
+    from google.genai import types
+    from adk_devin_local.client import _pack_tool
+
+    schema = types.Schema(
+        type="OBJECT", properties={"x": types.Schema(type="STRING")}, required=["x"]
+    )
+    fn = types.FunctionDeclaration(
+        name="f", description="d", parameters=schema,
+        parameters_json_schema={"type": "object", "properties": {}},
+    )
+    packed = _pack_tool(types.Tool(function_declarations=[fn]))
+    blobs = [v for n, w, v in fields(packed) if n == 10 and isinstance(v, bytes)]
+    inner = {n: v for n, w, v in fields(blobs[0]) if w == 2}
+    sent = _json.loads(inner[3].decode())
+    assert "x" in sent.get("properties", {})
