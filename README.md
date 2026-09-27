@@ -56,6 +56,50 @@ from adk_devin_local import list_models, model_uids
 print(model_uids())
 ```
 
+## ADK tools ported from the Pi plugins
+
+`build_tools(workspace, groups=...)` returns ADK-callable functions for the
+workspace/file, Git, Docker, Devbox, GitHub CLI, dependency, CodeGraph, web
+search/fetch/watch, memory, wiki, blackboard, project, cron, team mailbox,
+Telegram, voice and Jev capabilities. The first implementation registers 103
+callables across these groups:
+
+```python
+from pathlib import Path
+from google.adk.agents import LlmAgent
+from adk_devin_local import DevinLocal, GROUPS, build_tools, build_subagent_tools
+
+root = Path.cwd()
+agent = LlmAgent(
+    name="devin_adk",
+    model=DevinLocal(model="swe-2-high"),
+    instruction="Work in the configured project. Use tools for file changes and verification.",
+    tools=build_tools(root, groups=["files", "git", "web", "codegraph"]),
+)
+```
+
+For all tool groups, pass `groups=list(GROUPS)`. Prefer an explicit allowlist;
+103 functions can consume a substantial model context window. Add native ADK
+child-agent delegation with `tools=build_tools(...)+build_subagent_tools(root,
+"swe-2-high")` as appropriate. The implementer child gets file tools; research
+and review children are read-only.
+
+**Operational notes:** file tools are confined to the configured root. Shell-
+like Devbox and destructive/mutating Git, Docker, GitHub, dependency and
+CodeGraph actions require `ADK_DEVIN_ALLOW_MUTATIONS=1` in the trusted host
+environment (the model cannot set it). GitHub needs authenticated `gh`; Docker,
+Devbox, package managers, CodeGraph, Telegram bot credentials, voice binaries,
+OpenRouter credentials, and team-mailbox host processes are optional and must
+be configured separately. Local memory/wiki/blackboard/project/cron data is
+stored beneath `.adk-devin/` by default (override with `ADK_DEVIN_STATE_DIR`).
+
+This is a capability port, **not yet complete behavioral parity** with every
+Pi runtime feature: cron tools store/manage definitions but do not run a
+scheduler daemon; team/project calls rely on the Pi host mailbox protocol;
+voice/STT and Telegram need their optional services; detached child-process
+controls are replaced with ADK-managed `AgentTool` delegates. Review the
+plugin-specific README before assuming an operation has identical semantics.
+
 ## Current limitations
 
 - Experimental private endpoint; not an official Cognition API or ADK integration.
