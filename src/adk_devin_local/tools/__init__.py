@@ -52,7 +52,7 @@ GROUPS: dict[str, tuple[str, ...]] = {
 }
 
 
-def build_tools(workspace: str | Path, groups: list[str] | tuple[str, ...] | None = None) -> list[Any]:
+def build_tools(workspace: str | Path, groups: list[str] | tuple[str, ...] | None = None, env: dict[str, str] | None = None) -> list[Any]:
     """Build ADK function tools, selecting original Pi plugin IDs.
 
     Pass e.g. ``groups=["pi-git", "pi-docker", "pi-gh"]``. ``groups=None``
@@ -80,11 +80,11 @@ def build_tools(workspace: str | Path, groups: list[str] | tuple[str, ...] | Non
     }
     tools: dict[str, Any] = {
         "files": FileTools(root),
-        "pi-git": GitTools(root),
+        "pi-git": GitTools(root, env=env),
         "pi-docker": DockerTools(root),
-        "pi-devbox": DevboxTools(root),
-        "pi-gh": GithubTools(root),
-        "pi-deps": DependencyTools(root),
+        "pi-devbox": DevboxTools(root, env=env),
+        "pi-gh": GithubTools(root, env=env),
+        "pi-deps": DependencyTools(root, env=env),
         "pi-codegraph": CodeGraphTools(root),
         "pi-websearch": type("WebSearchTools", (), {"web_search": staticmethod(web_search), "web_fetch": staticmethod(web_fetch)})(),
         "pi-telegram": TelegramTools(),

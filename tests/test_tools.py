@@ -284,3 +284,39 @@ async def test_adk_executes_file_tool_and_returns_tool_result(tmp_path):
         if event.content:
             answers.extend(part.text for part in (event.content.parts or []) if part.text)
     assert any("tool cycle success" in answer for answer in answers)
+
+
+def test_cli_tools_env_overlay_reaches_subprocess():
+    """build_tools(env=...) overlays env on CliTools subprocesses."""
+    import json as _json
+    from adk_devin_local.tools import build_tools
+
+    tools = build_tools("/tmp", groups=["pi-git"], env={"GIT_TEST_MARK": "yes"})
+    git_status = next(t for t in tools if getattr(t, "__name__", "") == "git_status")
+    assert getattr(git_status, "__self__").env == {"GIT_TEST_MARK": "yes"}
+
+
+def test_cli_tools_run_merges_env():
+    from adk_devin_local.tools.gh import GithubTools
+
+    g = GithubTools("/tmp", env={"GH_TOKEN": "soul-token"})
+    seen = {}
+
+    class _P:
+        returncode = 0
+        stdout = "ok"
+        stderr = ""
+
+    import subprocess
+
+    orig = subprocess.run
+    def fake(argv, **kw):
+        seen.update(kw.get("env") or {})
+        return _P()
+    try:
+        subprocess.run = fake
+        out = g.gh_repo()
+    finally:
+        subprocess.run = orig
+    assert "soul-token" == seen.get("GH_TOKEN")
+    assert "exit_code" in out
