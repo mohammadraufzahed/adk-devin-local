@@ -86,8 +86,9 @@ def test_plugin_specific_stateful_tools(tmp_path):
     cron = CronTools(tmp_path)
     wiki = WikiTools(tmp_path)
     blackboard = BlackboardTools(tmp_path)
-    assert memory.memory_store("remember the deployment window", "ops").startswith("Stored")
-    assert memory.memory_recall("deployment")[0]["key"] == "ops"
+    import asyncio
+    assert asyncio.run(memory.memory_store("remember the deployment window", "ops")).startswith("Stored")
+    assert asyncio.run(memory.memory_recall("deployment"))[0]["key"] == "ops"
     assert cron.cron_add("every:15m", "check status").startswith("Recorded")
     assert len(cron.cron_list()) == 1
     assert cron.cron_list()[0]["spec"] == "every:15m"
@@ -108,14 +109,15 @@ def test_pi_plugin_groups_map_to_matching_modules(tmp_path):
     from adk_devin_local.tools import git, docker, devbox, gh, deps
     from adk_devin_local.tools import codegraph, websearch, webwatch, memory
     from adk_devin_local.tools import wiki, blackboard, project, cron, team
-    from adk_devin_local.tools import telegram, voice, jev, subagents
+    from adk_devin_local.tools import telegram, voice, jev, subagents, cognition
     modules = [git, docker, devbox, gh, deps, codegraph, websearch, webwatch, memory,
-               wiki, blackboard, project, cron, team, telegram, voice, jev, subagents]
-    assert len(modules) == 18
+               wiki, blackboard, project, cron, team, telegram, voice, jev, subagents,
+               cognition]
+    assert len(modules) == 19
     expected_groups = {"files", *(f"pi-{name}" for name in (
         "git", "docker", "devbox", "gh", "deps", "codegraph", "websearch", "webwatch",
         "memory", "wiki", "blackboard", "project", "cron", "team", "telegram", "voice",
-        "jev", "subagents"))}
+        "jev", "subagents", "cognition"))}
     assert set(GROUPS) == expected_groups
     import inspect
     for group, funcs in ((group, build_tools(tmp_path, [group])) for group in GROUPS):

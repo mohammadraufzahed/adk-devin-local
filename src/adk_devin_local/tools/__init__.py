@@ -11,6 +11,7 @@ from typing import Any
 
 from .files import FileTools
 from .blackboard import BlackboardTools
+from .cognition import CognitionTools
 from .codegraph import CodeGraphTools
 from .cron import CronTools
 from .deps import DependencyTools
@@ -39,9 +40,10 @@ GROUPS: dict[str, tuple[str, ...]] = {
     "pi-websearch": ("web_search", "web_fetch"),
     "pi-webwatch": ("webwatch_add", "webwatch_list", "webwatch_check", "webwatch_remove"),
     "pi-memory": ("memory_store", "memory_recall", "memory_forget"),
-    "pi-wiki": ("wiki_write", "wiki_read", "wiki_search"),
+    "pi-cognition": ("skill_save", "skill_list", "skill_read", "skill_forget", "recall_search", "user_note", "user_recall", "user_forget"),
+    "pi-wiki": ("wiki_write", "wiki_read", "wiki_list", "wiki_search"),
     "pi-blackboard": ("bb_set", "bb_get", "bb_append", "bb_list", "bb_claim"),
-    "pi-project": ("project_list", "project_current", "project_use", "project_register", "project_forget"),
+    "pi-project": ("project_list", "project_current", "project_use", "project_register", "project_forget", "project_mode"),
     "pi-cron": ("cron_add", "cron_list", "cron_pause", "cron_edit", "cron_remove", "job_state"),
     "pi-team": ("team_roster", "team_ask", "team_task", "team_emit", "team_handoff", "team_say", "team_status"),
     "pi-telegram": ("tg_send", "tg_react", "tg_pin", "tg_edit", "tg_delete", "tg_unpin", "tg_history", "tg_topics"),
@@ -70,6 +72,7 @@ def build_tools(workspace: str | Path, groups: list[str] | tuple[str, ...] | Non
         name: factory(root, env=env)
         for name, factory in {
             "pi-blackboard": BlackboardTools,
+            "pi-cognition": CognitionTools,
             "pi-cron": CronTools,
             "pi-memory": MemoryTools,
             "pi-project": ProjectTools,

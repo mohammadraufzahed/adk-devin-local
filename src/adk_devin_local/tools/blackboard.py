@@ -6,11 +6,23 @@ from typing import Any
 from .stateful import StatefulTools
 
 class BlackboardTools(StatefulTools):
+    """Shared board — the host team board lives at PI_TEAM_DIR/bb so ADK
+    souls read/write the same keys as pi-runtime souls."""
+
+    @property
+    def _bbdir(self) -> "Path":
+        import os
+        from pathlib import Path
+        team = self._e("PI_TEAM_DIR")
+        if team:
+            return Path(team) / "bb"
+        return self.state / "blackboard"
+
     def blackboard_set(self, key: str, value: str) -> str:
         """Write a shared board value available to other local ADK runs."""
         safe=re.sub(r"[^\w.:#-]", "_", key)[:120]
         if not safe:return "Invalid board key."
-        path=self.state/"blackboard"; path.mkdir(exist_ok=True)
+        path=self._bbdir; path.mkdir(parents=True, exist_ok=True)
         tmp=path/(safe+".tmp"); target=path/safe
         tmp.write_text(value[:100_000],encoding="utf-8"); os.replace(tmp,target)
         return f"Set blackboard key '{safe}'."
@@ -22,7 +34,7 @@ class BlackboardTools(StatefulTools):
     def blackboard_get(self, key: str) -> str:
         """Read a shared board value."""
         safe=re.sub(r"[^\w.:#-]", "_", key)[:120]
-        path=self.state/"blackboard"/safe
+        path=self._bbdir/safe
         try:return path.read_text(encoding="utf-8")
         except FileNotFoundError:return "(empty)"
 
@@ -33,7 +45,7 @@ class BlackboardTools(StatefulTools):
     def blackboard_append(self, key: str, line: str) -> str:
         """Append a line to a shared blackboard ledger."""
         safe=re.sub(r"[^\w.:#-]", "_", key)[:120]
-        path=self.state/"blackboard"; path.mkdir(exist_ok=True)
+        path=self._bbdir; path.mkdir(parents=True, exist_ok=True)
         with (path/safe).open("a",encoding="utf-8") as stream:stream.write(line[:4000]+"\n")
         return "Appended to blackboard."
 
@@ -43,7 +55,7 @@ class BlackboardTools(StatefulTools):
 
     def blackboard_list(self, prefix: str = "") -> list[dict[str, Any]]:
         """List blackboard keys, newest first, optionally by prefix."""
-        path=self.state/"blackboard"
+        path=self._bbdir
         if not path.exists():return []
         found=[]
         for item in path.iterdir():
@@ -58,7 +70,7 @@ class BlackboardTools(StatefulTools):
     def blackboard_claim(self, key: str, owner: str, ttl_seconds: int = 900, note: str = "") -> dict[str, Any]:
         """Acquire or inspect an expiring blackboard work claim."""
         safe=re.sub(r"[^\w.:#-]", "_", key)[:120]
-        path=self.state/"blackboard"; path.mkdir(exist_ok=True); target=path/("claim_"+safe)
+        path=self._bbdir; path.mkdir(parents=True, exist_ok=True); target=path/("claim_"+safe)
         now=time.time()
         try:current=json.loads(target.read_text(encoding="utf-8"))
         except (OSError,ValueError):current=None
