@@ -1,13 +1,15 @@
 """DuckDuckGo web search and guarded page extraction."""
 from __future__ import annotations
 
-import html
+import asyncio
 import ipaddress
 import socket
 from html.parser import HTMLParser
-from urllib.parse import parse_qs, quote_plus, urlparse
+from urllib.parse import urlparse
 
 import httpx
+import trafilatura
+from ddgs import DDGS
 
 
 def _public_url(url: str) -> str:
@@ -39,29 +41,19 @@ class _TextExtractor(HTMLParser):
 
 
 async def web_search(query: str, limit: int = 6) -> list[dict[str, str]]:
-    """Search public web pages with DuckDuckGo (no API key required)."""
-    async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0 adk-devin-local"}) as client:
-        response = await client.get("https://html.duckduckgo.com/html/", params={"q": query[:500]})
-        response.raise_for_status()
-    class SearchParser(HTMLParser):
-        def __init__(self): super().__init__(); self.items=[]; self.current=None; self.capture=None
-        def handle_starttag(self, tag, attrs):
-            attrs=dict(attrs)
-            if tag == "a" and "result__a" in attrs.get("class", ""):
-                self.current={"title":"", "url":attrs.get("href", "")}; self.capture="title"
-            elif tag == "a" and self.current and "result__snippet" in attrs.get("class", ""): self.capture="snippet"
-        def handle_endtag(self, tag):
-            if tag == "a" and self.current and self.capture == "title": self.capture=None
-            if tag == "a" and self.current and self.capture == "snippet":
-                self.items.append(self.current); self.current=None; self.capture=None
-        def handle_data(self, data):
-            if self.current and self.capture: self.current[self.capture] += data
-    parser=SearchParser(); parser.feed(response.text)
-    results=[]
-    for item in parser.items:
-        target=parse_qs(urlparse(item["url"]).query).get("uddg", [item["url"]])[0]
-        results.append({"title":html.unescape(item["title"]).strip(), "url":target, "snippet":html.unescape(item.get("snippet", "")).strip()})
-    return results[:max(1,min(limit,10))]
+    """Search the web with the ``ddgs`` package (no API key required)."""
+    max_results = max(1, min(limit, 10))
+    matches = await asyncio.to_thread(
+        lambda: list(DDGS().text(query[:500], max_results=max_results))
+    )
+    return [
+        {
+            "title": str(item.get("title", "")),
+            "url": str(item.get("href", item.get("url", ""))),
+            "snippet": str(item.get("body", item.get("snippet", ""))),
+        }
+        for item in matches[:max_results]
+    ]
 
 
 async def web_fetch(url: str, max_chars: int = 8000) -> dict[str, str]:
@@ -75,6 +67,9 @@ async def web_fetch(url: str, max_chars: int = 8000) -> dict[str, str]:
             target=_public_url(urljoin(safe, location))
             response=await client.get(target)
         response.raise_for_status()
-    parser=_TextExtractor(); parser.feed(response.text)
-    text=" ".join(" ".join(parser.parts).split())
+    text = trafilatura.extract(response.text, include_comments=False, include_tables=False)
+    if not text:
+        parser = _TextExtractor()
+        parser.feed(response.text)
+        text = " ".join(" ".join(parser.parts).split())
     return {"url": str(response.url), "text": text[:max(100,min(max_chars,30_000))]}

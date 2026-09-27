@@ -59,10 +59,10 @@ print(model_uids())
 ## ADK tools ported from the Pi plugins
 
 `build_tools(workspace, groups=...)` returns ADK-callable functions for the
-workspace/file, Git, Docker, Devbox, GitHub CLI, dependency, CodeGraph, web
-search/fetch/watch, memory, wiki, blackboard, project, cron, team mailbox,
-Telegram, voice and Jev capabilities. The first implementation registers 103
-callables across these groups:
+workspace/file tools and the Pi plugin groups. Each original plugin has its own
+adapter module (for example, `git.py`, `docker.py`, and `team.py`);
+shared utilities are kept in internal base modules. Group IDs match the original
+plugin names, such as `pi-git` and `pi-docker`:
 
 ```python
 from pathlib import Path
@@ -74,12 +74,12 @@ agent = LlmAgent(
     name="devin_adk",
     model=DevinLocal(model="swe-2-high"),
     instruction="Work in the configured project. Use tools for file changes and verification.",
-    tools=build_tools(root, groups=["files", "git", "web", "codegraph"]),
+    tools=build_tools(root, groups=["files", "pi-git", "pi-websearch", "pi-codegraph"]),
 )
 ```
 
 For all tool groups, pass `groups=list(GROUPS)`. Prefer an explicit allowlist;
-103 functions can consume a substantial model context window. Add native ADK
+the full set can consume a substantial model context window. Add native ADK
 child-agent delegation with `tools=build_tools(...)+build_subagent_tools(root,
 "swe-2-high")` as appropriate. The implementer child gets file tools; research
 and review children are read-only.
@@ -87,11 +87,14 @@ and review children are read-only.
 **Operational notes:** file tools are confined to the configured root. Shell-
 like Devbox and destructive/mutating Git, Docker, GitHub, dependency and
 CodeGraph actions require `ADK_DEVIN_ALLOW_MUTATIONS=1` in the trusted host
-environment (the model cannot set it). GitHub needs authenticated `gh`; Docker,
-Devbox, package managers, CodeGraph, Telegram bot credentials, voice binaries,
-OpenRouter credentials, and team-mailbox host processes are optional and must
-be configured separately. Local memory/wiki/blackboard/project/cron data is
-stored beneath `.adk-devin/` by default (override with `ADK_DEVIN_STATE_DIR`).
+environment (the model cannot set it). GitHub needs authenticated `gh`; Docker
+uses the Python SDK and a reachable daemon (`DOCKER_HOST`/TLS configuration),
+while Devbox, package managers, and CodeGraph require their CLIs. Telegram bot
+credentials, OpenRouter credentials, Edge TTS network access, transcription API
+keys, and team-mailbox host processes must be configured for those features.
+APScheduler validates schedules and previews next-run times; it does not run a
+scheduler daemon. Local memory/wiki/blackboard/project/cron data is stored
+beneath `.adk-devin/` by default (override with `ADK_DEVIN_STATE_DIR`).
 
 This is a capability port, **not yet complete behavioral parity** with every
 Pi runtime feature: cron tools store/manage definitions but do not run a

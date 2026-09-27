@@ -27,8 +27,8 @@ def build_subagent_tools(workspace: str | Path, model_uid: str, roles: dict[str,
     result=[]
     for name, instruction in definitions.items():
         writable = name == "implementer"
-        groups = ["files", "web", "codegraph", "memory", "wiki"]
-        if writable: groups += ["git", "devbox", "deps"]
+        groups = ["files", "pi-websearch", "pi-codegraph", "pi-memory", "pi-wiki"]
+        if writable: groups += ["pi-git", "pi-devbox", "pi-deps"]
         child=LlmAgent(name=f"devin_{name}", model=DevinLocal(model=model_uid),
             description=f"Delegate a {name} task to a Devin Local child agent.",
             instruction=instruction, tools=build_tools(workspace, groups))

@@ -10,7 +10,20 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Mohammad Raufzahed" }]
-dependencies = ["google-adk>=1.0.0", "httpx>=0.27", "protobuf>=5"]
+dependencies = [
+    "google-adk>=1.0.0",
+    "httpx>=0.27",
+    "protobuf>=5",
+    "ddgs>=9.0.0",
+    "croniter>=6",
+    "docker>=7",
+    "edge-tts>=7",
+    "feedparser>=6",
+    "openai>=1",
+    "python-telegram-bot>=22",
+    "trafilatura>=2",
+    "apscheduler>=3.10,<4",
+]
 keywords = ["google-adk", "devin", "devin-local", "agent-framework"]
 
 [project.optional-dependencies]
