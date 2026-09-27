@@ -75,6 +75,49 @@ class GithubTools(CliTools):
         if repo:args.extend(["--repo",repo])
         return self._run(args)
 
+    def gh_pr_diff(self, number: int, repo: str = "") -> str:
+        """Read a pull request's full diff for review."""
+        args = ["gh", "pr", "diff", str(number)]
+        if repo: args.extend(["--repo", repo])
+        return self._run(args, timeout=90)
+
+    def gh_pr_review(self, number: int, event: str = "comment", body: str = "", repo: str = "") -> str:
+        """Submit a PR review (approve|request-changes|comment); requires host mutation opt-in."""
+        denied = self._mutate("GitHub PR review")
+        if denied: return denied
+        event_map = {"approve": "--approve", "request-changes": "--request-changes", "comment": "--comment"}
+        flag = event_map.get(event)
+        if not flag: return "Invalid review event; use approve, request-changes, or comment."
+        args = ["gh", "pr", "review", str(number), flag]
+        if body: args.extend(["--body", body[:20000]])
+        if repo: args.extend(["--repo", repo])
+        return self._run(args)
+
+    def gh_comment_react(self, kind: str, id: int, reaction: str, repo: str = "") -> str:
+        """Add a reaction to an issue, PR, or comment; requires host mutation opt-in."""
+        denied = self._mutate("GitHub reaction")
+        if denied: return denied
+        valid = {"+1", "-1", "laugh", "hooray", "confused", "heart", "rocket", "eyes"}
+        if reaction not in valid: return f"Invalid reaction; use one of {sorted(valid)}."
+        if kind not in {"issue", "pr", "issue_comment", "review_comment"}: return "Invalid kind."
+        base = repo or "{owner}/{repo}"  # gh api expands placeholders from cwd/GH_REPO
+        if kind in {"issue", "pr"}:
+            endpoint = f"repos/{base}/{'issues' if kind == 'issue' else 'pulls'}/{id}/reactions"
+        else:
+            endpoint = f"repos/{base}/{'issues' if kind == 'issue_comment' else 'pulls'}/comments/{id}/reactions"
+        return self._run(["gh", "api", endpoint, "--method", "POST", "-f", f"content={reaction}"])
+
+    def gh_comment_reply(self, number: int, body: str, in_reply_to: int = 0, repo: str = "") -> str:
+        """Reply to a review comment (threaded) or comment on an issue/PR; requires host mutation opt-in."""
+        denied = self._mutate("GitHub comment reply")
+        if denied: return denied
+        if in_reply_to:
+            base = repo or "{owner}/{repo}"
+            return self._run(["gh", "api", f"repos/{base}/pulls/{number}/comments/{in_reply_to}/replies", "--method", "POST", "-f", f"body={body[:20000]}"])
+        args = ["gh", "pr", "comment", str(number), "--body", body[:20000]]
+        if repo: args.extend(["--repo", repo])
+        return self._run(args)
+
     def gh_pr_merge(self, number: int, method: str = "squash", repo: str = "") -> str:
         """Merge a pull request; requires host mutation opt-in."""
         denied=self._mutate("GitHub PR merge")

@@ -70,6 +70,14 @@ class DevboxTools(CliTools):
         if denied:return denied
         return self._run(["devbox","update"],timeout=180)
 
+    def devbox_add(self, package: str) -> str:
+        """Add a package to the project's devbox.json; requires host mutation opt-in."""
+        return self.devbox_package("add", package)
+
+    def devbox_remove(self, package: str) -> str:
+        """Remove a package from the project's devbox.json; requires host mutation opt-in."""
+        return self.devbox_package("remove", package)
+
     def devbox_package(self, action: str, package: str) -> str:
         """Add or remove one Devbox package; requires host mutation opt-in."""
         if action not in {"add","remove"} or not re.fullmatch(r"[A-Za-z0-9_.+-]{1,120}",package):return "Invalid package/action."

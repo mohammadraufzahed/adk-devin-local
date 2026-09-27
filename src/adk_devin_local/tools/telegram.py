@@ -61,6 +61,23 @@ class TelegramTools(TelegramApi):
         if message_id: payload["message_id"]=str(message_id)
         return await self._tg("unpinChatMessage",payload)
 
+    def tg_topics(self) -> Any:
+        """List the group's forum topics ('id — name' lines) from TG_TOPICS env."""
+        raw = self._e("TG_TOPICS", "")
+        if not raw: return {"error": "TG_TOPICS not configured; no forum topics learned."}
+        try: data = json.loads(raw)
+        except (ValueError, TypeError): return {"error": "TG_TOPICS is not valid JSON."}
+        chat = str(self.chat or "")
+        topics = data.get(chat) or data.get(str(chat)) or (data if isinstance(data, dict) else {})
+        if isinstance(topics, dict) and topics and all(isinstance(v, (int, str)) for v in topics.values()):
+            return {"topics": [{"id": tid, "name": name} for name, tid in topics.items()]}
+        # flat mapping {name: tid} fallback
+        if isinstance(data, dict):
+            flat = data.get(chat, data)
+            if isinstance(flat, dict):
+                return {"topics": [{"id": v, "name": k} for k, v in flat.items()]}
+        return {"error": "No topics found for this chat."}
+
     async def tg_history(self, query: str, limit: int = 20) -> Any:
         """Search the host's Telegram journal through its PI_TEAM_DIR mailbox."""
         directory=self._e("PI_TEAM_DIR")
