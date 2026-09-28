@@ -19,7 +19,7 @@ class TeamTools(StatefulTools):
         target = Path(directory) / "requests"; target.mkdir(parents=True, exist_ok=True)
         rid = uuid.uuid4().hex
         request = {"id": rid, "from": self._e("PI_TEAM_FROM", "adk"), "to": to,
-                   "kind": "say", "text": message[:8000], "at": time.time()}
+                   "kind": "say", "text": message[:8000], "at": int(time.time() * 1000)}
         (target / f"{rid}.json").write_text(json.dumps(request), encoding="utf-8")
         return f"Team message queued ({rid})."
 
@@ -31,7 +31,7 @@ class TeamTools(StatefulTools):
         reqdir.mkdir(parents=True, exist_ok=True); repdir.mkdir(parents=True, exist_ok=True)
         rid = uuid.uuid4().hex
         req = {"id": rid, "from": self._e("PI_TEAM_FROM", "adk"), "to": to,
-               "kind": "ask", "text": question[:8000], "at": time.time()}
+               "kind": "ask", "text": question[:8000], "at": int(time.time() * 1000)}
         (reqdir / f"{rid}.json").write_text(json.dumps(req), encoding="utf-8")
         deadline = time.monotonic() + max(1, min(timeout_seconds, 600))
         while time.monotonic() < deadline:
@@ -49,7 +49,7 @@ class TeamTools(StatefulTools):
         if not directory:return "PI_TEAM_DIR is not configured; no team mailbox is available."
         reqdir=Path(directory)/"requests"; reqdir.mkdir(parents=True,exist_ok=True)
         rid=uuid.uuid4().hex
-        request={"id":rid,"from":self._e("PI_TEAM_FROM","adk"),"to":to,"kind":"task","text":task[:8000],"budget_s":max(60,min(budget_min,120))*60,"at":time.time()}
+        request={"id":rid,"from":self._e("PI_TEAM_FROM","adk"),"to":to,"kind":"task","text":task[:8000],"budget_s":max(60,min(budget_min,120))*60,"at":int(time.time() * 1000)}
         (reqdir/f"{rid}.json").write_text(json.dumps(request),encoding="utf-8")
         return f"Task delegated to {to} ({rid}); host watcher must be running."
 
@@ -59,7 +59,7 @@ class TeamTools(StatefulTools):
         if not directory:return "PI_TEAM_DIR is not configured; no team mailbox is available."
         reqdir=Path(directory)/"requests"; reqdir.mkdir(parents=True,exist_ok=True)
         rid=uuid.uuid4().hex
-        request={"id":rid,"from":self._e("PI_TEAM_FROM","adk"),"to":to,"kind":"event","text":event[:120]+(" "+payload[:7000] if payload else ""),"at":time.time()}
+        request={"id":rid,"from":self._e("PI_TEAM_FROM","adk"),"to":to,"kind":"event","text":event[:120]+(" "+payload[:7000] if payload else ""),"at":int(time.time() * 1000)}
         (reqdir/f"{rid}.json").write_text(json.dumps(request),encoding="utf-8")
         return f"Event {event} emitted ({rid})."
 
@@ -74,6 +74,6 @@ class TeamTools(StatefulTools):
         reqdir = Path(directory) / "requests"; reqdir.mkdir(parents=True, exist_ok=True)
         rid = uuid.uuid4().hex
         request = {"id": rid, "from": self._e("PI_TEAM_FROM", "adk"), "to": to,
-                   "kind": "handoff", "text": task[:8000], "at": time.time()}
+                   "kind": "handoff", "text": task[:8000], "at": int(time.time() * 1000)}
         (reqdir / f"{rid}.json").write_text(json.dumps(request), encoding="utf-8")
         return f"Request handed to {to} ({rid}); the host mailbox watcher must be running."

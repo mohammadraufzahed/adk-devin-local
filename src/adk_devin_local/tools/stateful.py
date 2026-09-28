@@ -31,7 +31,7 @@ class StatefulTools(EnvOverlay):
         target=Path(directory); reqdir=target/"requests"; repdir=target/"replies"
         reqdir.mkdir(parents=True,exist_ok=True); repdir.mkdir(parents=True,exist_ok=True)
         rid=uuid.uuid4().hex
-        request={"id":rid,"from":self._e("PI_TEAM_FROM","adk"),"to":"host","kind":kind,"text":text,"at":time.time()}
+        request={"id":rid,"from":self._e("PI_TEAM_FROM","adk"),"to":"host","kind":kind,"text":text,"at":int(time.time() * 1000)}
         (reqdir/f"{rid}.json").write_text(json.dumps(request),encoding="utf-8")
         import asyncio
         deadline=time.monotonic()+timeout

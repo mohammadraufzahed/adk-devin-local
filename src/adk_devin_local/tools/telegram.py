@@ -95,7 +95,7 @@ class TelegramTools(TelegramApi):
         reqdir=Path(directory)/"requests"; repdir=Path(directory)/"replies"
         reqdir.mkdir(parents=True,exist_ok=True); repdir.mkdir(parents=True,exist_ok=True)
         rid=uuid.uuid4().hex
-        request={"id":rid,"from":self._e("PI_TEAM_FROM","adk"),"to":"host","kind":"tg_history","text":json.dumps({"query":query,"limit":max(1,min(limit,100))}),"at":time.time()}
+        request={"id":rid,"from":self._e("PI_TEAM_FROM","adk"),"to":"host","kind":"history","text":f"{query}|||{max(1,min(limit,100))}","at":int(time.time() * 1000)}
         (reqdir/f"{rid}.json").write_text(json.dumps(request))
         deadline=time.monotonic()+30
         while time.monotonic()<deadline:
