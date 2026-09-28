@@ -54,6 +54,38 @@ GROUPS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _guarded(fn):
+    """Return a wrapper that converts tool exceptions into error results.
+
+    google-adk propagates exceptions raised inside a FunctionTool up
+    through the node runner, killing the whole run. Returning an error
+    string instead lets the model see the failure and retry.
+    functools.wraps preserves the signature ADK inspects.
+    """
+    import functools
+    import inspect
+
+    def _err(exc: Exception):
+        return {"error": f"{type(exc).__name__}: {exc}"[:500]}
+
+    if inspect.iscoroutinefunction(fn):
+        @functools.wraps(fn)
+        async def awrapper(*args, **kwargs):
+            try:
+                return await fn(*args, **kwargs)
+            except Exception as exc:  # never kill the run
+                return _err(exc)
+        return awrapper
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:  # never kill the run
+            return _err(exc)
+    return wrapper
+
+
 def build_tools(workspace: str | Path, groups: list[str] | tuple[str, ...] | None = None, env: dict[str, str] | None = None) -> list[Any]:
     """Build ADK function tools, selecting original Pi plugin IDs.
 
@@ -96,7 +128,7 @@ def build_tools(workspace: str | Path, groups: list[str] | tuple[str, ...] | Non
         "pi-subagents": None,
         **stateful,
     }
-    return [getattr(tools[group], name) for group in selected for name in GROUPS[group]]
+    return [_guarded(getattr(tools[group], name)) for group in selected for name in GROUPS[group]]
 
 
 __all__ = ["GROUPS", "build_tools"]

@@ -64,8 +64,11 @@ def test_file_operations_and_root_confinement(tmp_path):
     assert files.list_files("src") == ["src/example.py"]
     with pytest.raises(ValueError, match="exactly one"):
         files.edit_file("src/example.py", "missing", "x")
-    with pytest.raises(ValueError, match="escapes"):
+    # sibling-of-root (worktree) and /tmp are allowed; truly outside is not
+    with pytest.raises((ValueError, FileNotFoundError)):
         files.read_file("../outside.txt")
+    with pytest.raises(ValueError, match="escapes"):
+        files.read_file("/etc/passwd")
     with pytest.raises(ValueError, match="confirm=true"):
         files.delete_file("src/example.py")
     files.delete_file("src/example.py", confirm=True)
@@ -73,11 +76,15 @@ def test_file_operations_and_root_confinement(tmp_path):
 
 
 def test_file_tools_reject_symlink_escape(tmp_path):
-    outside = tmp_path.parent / "outside-adk-test.txt"
-    outside.write_text("secret")
-    (tmp_path / "escape").symlink_to(outside)
+    # symlink targets outside all allowed roots still escape
+    (tmp_path / "escape").symlink_to("/etc/hostname")
     with pytest.raises(ValueError, match="escapes"):
         FileTools(tmp_path).read_file("escape")
+    # a symlink into the sibling scope (worktree pattern) is allowed
+    outside = tmp_path.parent / "outside-adk-test.txt"
+    outside.write_text("secret")
+    (tmp_path / "escape2").symlink_to(outside)
+    assert FileTools(tmp_path).read_file("escape2") == "secret"
     outside.unlink()
 
 

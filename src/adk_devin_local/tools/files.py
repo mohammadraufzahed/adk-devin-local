@@ -15,17 +15,26 @@ class FileTools:
             raise ValueError("workspace root must be a directory")
 
     def _path(self, relative_path: str, *, allow_missing: bool = False) -> Path:
-        candidate = (self.root / relative_path).resolve(strict=False)
-        try:
-            candidate.relative_to(self.root)
-        except ValueError as exc:
-            raise ValueError("path escapes the configured workspace") from exc
+        # Absolute paths are honored — souls legitimately work in git
+        # worktrees (e.g. /tmp/wt-issue-97) outside the repo root.
+        raw = Path(relative_path).expanduser()
+        candidate = (raw if raw.is_absolute() else self.root / raw).resolve(strict=False)
+        allowed = [self.root, self.root.parent, Path("/tmp")]
+        for extra in os.environ.get("ADK_FILE_ROOTS", "").split(os.pathsep):
+            if extra.strip():
+                allowed.append(Path(extra).expanduser())
+        if not any(
+            candidate == a or a in candidate.parents for a in allowed
+        ):
+            raise ValueError(
+                "path escapes the allowed roots (workspace, its parent, /tmp)"
+            )
         if not allow_missing:
             candidate.stat()  # preserve normal FileNotFoundError after the boundary check
         return candidate
 
     def read_file(self, path: str) -> str:
-        """Read a UTF-8 text file within the configured workspace."""
+        """Read a UTF-8 text file (workspace, sibling dirs, or /tmp)."""
         target = self._path(path)
         if not target.is_file():
             raise ValueError("path is not a regular file")
