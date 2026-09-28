@@ -64,10 +64,13 @@ class CronTools(StatefulTools):
                 if j.get("dedup_key") == dedup_key:
                     f.unlink(missing_ok=True)
         env = self._merged_env()
-        # in:N (minutes; 's' suffix = seconds) → once:<unix ts>
+        # in:N[smh] → once:<unix ts> (bare number = minutes, like pi-cron)
         if spec.startswith("in:"):
             raw = spec[3:]
-            secs = int(raw[:-1] if raw.endswith("s") else raw) * (1 if raw.endswith("s") else 60)
+            match = re.fullmatch(r"(\d+)([smh]?)", raw)
+            if not match:
+                return f"bad spec '{spec}' — in:N needs an integer with optional s/m/h"
+            secs = int(match.group(1)) * {"s": 1, "m": 60, "h": 3600}[match.group(2) or "m"]
             spec = f"once:{int(time.time()) + secs}"
         jid = str(uuid.uuid4())
         env["PI_JOB_ID"] = jid
@@ -137,12 +140,20 @@ class CronTools(StatefulTools):
             return DateTrigger(run_date=now + timedelta(seconds=seconds), timezone=timezone.utc)
         if spec.startswith("daily:"):
             value = spec.removeprefix("daily:")
+            tz = timezone.utc
+            if "@" in value:
+                value, _, zone = value.partition("@")
+                try:
+                    from zoneinfo import ZoneInfo
+                    tz = ZoneInfo(zone)
+                except Exception:
+                    tz = timezone.utc
             if not re.fullmatch(r"\d{2}:\d{2}", value):
                 raise ValueError("Use daily:HH:MM in 24-hour time.")
             hour, minute = map(int, value.split(":"))
             if hour > 23 or minute > 59:
                 raise ValueError("Daily time is outside the valid clock range.")
-            return CronTrigger(hour=hour, minute=minute, timezone=timezone.utc)
+            return CronTrigger(hour=hour, minute=minute, timezone=tz)
         if spec.startswith("once:"):
             value = spec.removeprefix("once:")
             if not re.fullmatch(r"\d{9,}", value):
@@ -153,8 +164,16 @@ class CronTools(StatefulTools):
             return DateTrigger(run_date=run_at, timezone=timezone.utc)
         if spec.startswith("cron:"):
             expression = spec.removeprefix("cron:").strip()
+            tz = timezone.utc
+            if "@" in expression:
+                expression, _, zone = expression.partition("@")
+                try:
+                    from zoneinfo import ZoneInfo
+                    tz = ZoneInfo(zone)
+                except Exception:
+                    tz = timezone.utc
             try:
-                return CronTrigger.from_crontab(expression, timezone=timezone.utc)
+                return CronTrigger.from_crontab(expression.strip(), timezone=tz)
             except ValueError as exc:
                 raise ValueError(f"Invalid cron expression: {exc}") from exc
         raise ValueError("Use every:<duration>, in:<duration>, daily:HH:MM, once:<unix-ts>, or cron:<5-field expression>.")
