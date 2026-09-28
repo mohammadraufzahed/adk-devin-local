@@ -41,46 +41,55 @@ class DevinLocal(BaseLlm):
         calls: dict[str, dict[str, Any]] = {}
         active_call_id: str | None = None
         usage: dict[str, int] = {}
+        error: str | None = None
 
         max_tokens = llm_request.config.max_output_tokens or 128_000
-        async for kind, value in generate(
-            self.model, system, list(llm_request.contents), tools, max_tokens
-        ):
-            if kind == "text":
-                text_parts.append(value)
-                if stream:
-                    yield LlmResponse(
-                        content=types.Content(
-                            role="model", parts=[types.Part(text=value)]
-                        ),
-                        partial=True,
-                    )
-            elif kind == "thinking":
-                thinking_parts.append(value)
-                if stream:
-                    yield LlmResponse(
-                        content=types.Content(
-                            role="model", parts=[types.Part(text=value, thought=True)]
-                        ),
-                        partial=True,
-                    )
-            elif kind == "tool_start":
-                call_id, name = value
-                active_call_id = call_id
-                calls[call_id] = {"id": call_id, "name": name, "args_text": ""}
-            elif kind == "tool_args":
-                call_id, delta = value
-                # Devin streams later argument deltas without repeating the
-                # function-call id. Match them to the active call, as the
-                # protocol's sequential tool-call stream requires.
-                target_id = call_id or active_call_id
-                if target_id is None or target_id not in calls:
-                    raise RuntimeError(
-                        "Devin streamed tool arguments without a matching call"
-                    )
-                calls[target_id]["args_text"] += delta
-            elif kind == "usage":
-                usage.update(value)
+        try:
+            async for kind, value in generate(
+                self.model, system, list(llm_request.contents), tools, max_tokens
+            ):
+                if kind == "text":
+                    text_parts.append(value)
+                    if stream:
+                        yield LlmResponse(
+                            content=types.Content(
+                                role="model", parts=[types.Part(text=value)]
+                            ),
+                            partial=True,
+                        )
+                elif kind == "thinking":
+                    thinking_parts.append(value)
+                    if stream:
+                        yield LlmResponse(
+                            content=types.Content(
+                                role="model",
+                                parts=[types.Part(text=value, thought=True)],
+                            ),
+                            partial=True,
+                        )
+                elif kind == "tool_start":
+                    call_id, name = value
+                    active_call_id = call_id
+                    calls[call_id] = {"id": call_id, "name": name, "args_text": ""}
+                elif kind == "tool_args":
+                    call_id, delta = value
+                    # Devin streams later argument deltas without repeating the
+                    # function-call id. Match them to the active call, as the
+                    # protocol's sequential tool-call stream requires.
+                    target_id = call_id or active_call_id
+                    if target_id is None or target_id not in calls:
+                        raise RuntimeError(
+                            "Devin streamed tool arguments without a matching call"
+                        )
+                    calls[target_id]["args_text"] += delta
+                elif kind == "usage":
+                    usage.update(value)
+        except Exception as exc:
+            if "without a matching call" in str(exc):
+                raise  # wire-protocol violation — a bug, never an endpoint error
+            # Endpoint/stream errors degrade to a visible model message so the
+            # soul's run reports the problem instead of dying on a node error.
+            error = str(exc)[:400]
 
         final_parts: list[types.Part] = []
         if thinking_parts:
@@ -101,6 +110,9 @@ class DevinLocal(BaseLlm):
                     )
                 )
             )
+        if error:
+            final_parts.append(types.Part(text=f"[Devin endpoint error: {error} — retry the request]"))
+
         metadata = (
             types.GenerateContentResponseUsageMetadata(
                 prompt_token_count=usage.get("input_tokens", 0),
