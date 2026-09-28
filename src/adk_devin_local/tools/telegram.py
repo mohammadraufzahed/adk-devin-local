@@ -65,6 +65,15 @@ class TelegramTools(TelegramApi):
         """List the group's forum topics ('id — name' lines) from TG_TOPICS env."""
         raw = self._e("TG_TOPICS", "")
         if not raw: return {"error": "TG_TOPICS not configured; no forum topics learned."}
+        raw = raw.strip()
+        if not raw.startswith("{"):
+            # host format: "id:name,id:name,..."
+            try:
+                pairs = [p.split(":", 1) for p in raw.split(",") if ":" in p]
+                topics = [{"id": int(i.strip()), "name": n.strip().replace("_", " ")} for i, n in pairs]
+                return {"topics": topics} if topics else {"error": "TG_TOPICS has no id:name pairs."}
+            except ValueError:
+                return {"error": "TG_TOPICS is neither JSON nor id:name pairs."}
         try: data = json.loads(raw)
         except (ValueError, TypeError): return {"error": "TG_TOPICS is not valid JSON."}
         chat = str(self.chat or "")
