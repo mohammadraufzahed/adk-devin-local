@@ -81,14 +81,13 @@ def _pack_tool(tool: Any) -> bytes:
     return b"".join(chunks)
 
 
-def _pack_content(content: Any) -> bytes:
+def _pack_content(content: Any) -> list[bytes]:
     role = getattr(content, "role", "user") or "user"
     source = {"user": 1, "model": 2, "assistant": 2, "function": 4}.get(role, 1)
     text_chunks: list[str] = []
     image_fields: list[bytes] = []
     tool_calls: list[bytes] = []
-    tool_result: str | None = None
-    tool_call_id = ""
+    tool_results: list[tuple[str, str]] = []  # (call_id, response_json)
     for part in getattr(content, "parts", None) or []:
         if part.text:
             text_chunks.append(part.text)
@@ -100,14 +99,20 @@ def _pack_content(content: Any) -> bytes:
             tool_calls.append(blob(6, text(1, fc.id or str(uuid.uuid4())) + text(2, fc.name or "") + text(3, json.dumps(fc.args or {}))))
         if part.function_response:
             fr = part.function_response
-            tool_call_id = fr.id or fr.name or ""
-            tool_result = json.dumps(fr.response or {})
-    if tool_result is not None:
-        source = 4
-        text_chunks.append(tool_result)
+            tool_results.append((fr.id or fr.name or "", json.dumps(fr.response or {})))
+    # Parallel tool calls produce multiple function_response parts in one
+    # Content — the wire protocol carries one result per message (field 7),
+    # so emit a separate message per response. Without this every result
+    # except the last was silently dropped (outputs looked "swapped").
+    if tool_results:
+        messages = []
+        for call_id, result in tool_results:
+            body = uint(2, 4) + text(3, result) + uint(4, max(1, len(result) // 4)) + uint(5, 1)
+            if call_id: body += text(7, call_id)
+            messages.append(blob(3, body))
+        return messages
     body = uint(2, source) + text(3, "\n".join(text_chunks)) + uint(4, max(1, len("\n".join(text_chunks)) // 4)) + uint(5, 1)
-    if tool_call_id: body += text(7, tool_call_id)
-    return blob(3, body + b"".join(tool_calls) + b"".join(image_fields))
+    return [blob(3, body + b"".join(tool_calls) + b"".join(image_fields))]
 
 
 def _request(model_uid: str, key: str, jwt: str, system: str, contents: list[Any], tools: list[Any], session: str, max_tokens: int = 128_000) -> bytes:
@@ -116,7 +121,7 @@ def _request(model_uid: str, key: str, jwt: str, system: str, contents: list[Any
     config = uint(1, 1) + uint(2, max_tokens) + uint(3, 400) + fixed64(5, 1.0) + uint(7, 40) + fixed64(8, .95)
     trajectory_ref = text(1, trajectory) + uint(3, 4) + uint(4, 14)
     return (blob(1, metadata) + (text(2, system) if system else b"") +
-        b"".join(_pack_content(c) for c in contents) + uint(7, 5) + blob(8, config) +
+        b"".join(msg for c in contents for msg in _pack_content(c)) + uint(7, 5) + blob(8, config) +
         b"".join(_pack_tool(t) for t in tools) + blob(15, trajectory_ref) +
         text(16, cascade) + uint(20, 1) + text(21, model_uid))
 

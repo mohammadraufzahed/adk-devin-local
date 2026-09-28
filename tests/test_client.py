@@ -86,3 +86,31 @@ def test_pack_tool_prefers_parameters_over_json_schema():
     inner = {n: v for n, w, v in fields(blobs[0]) if w == 2}
     sent = _json.loads(inner[3].decode())
     assert "x" in sent.get("properties", {})
+
+
+def test_pack_content_emits_one_message_per_function_response():
+    """Parallel tool calls → N function_response parts → N messages, each
+    tagged with its own call id (field 7). Previously only the last
+    survived, which misattributed outputs."""
+    from google.genai import types
+    from adk_devin_local.client import _pack_content
+
+    content = types.Content(
+        role="tool",
+        parts=[
+            types.Part(function_response=types.FunctionResponse(
+                id="call-1", name="a", response={"result": "first"})),
+            types.Part(function_response=types.FunctionResponse(
+                id="call-2", name="b", response={"result": "second"})),
+        ],
+    )
+    messages = _pack_content(content)
+    assert len(messages) == 2
+    seen = []
+    for msg in messages:
+        inner = [v for n, w, v in fields(msg) if n == 3][0]
+        inner_fields = {n: v for n, w, v in fields(inner)}
+        assert inner_fields[2] == 4  # source varint = tool result
+        seen.append((inner_fields[7].decode(), inner_fields[3].decode()))
+    assert ("call-1", '{"result": "first"}') in seen
+    assert ("call-2", '{"result": "second"}') in seen
