@@ -208,7 +208,13 @@ async def generate(model_uid: str, system: str, contents: list[Any], tools: list
                     error = json.loads(trailer_data).get("error", {}).get("message")
                 except (ValueError, AttributeError):
                     error = None
-                if error: raise RuntimeError(str(error))
+                if error:
+                    try:
+                        import pathlib
+                        pathlib.Path("/tmp/devin-failing-request.bin").write_bytes(payload)
+                    except OSError:
+                        pass
+                    raise RuntimeError(str(error))
                 continue
             for event in _decode_chat_frame(frame):
                 yield event
