@@ -64,6 +64,28 @@ async def _user_jwt(client: httpx.AsyncClient, key: str, host: str) -> str:
     raise RuntimeError("Devin GetUserJwt response did not contain a JWT")
 
 
+def _sanitize_schema(node: Any) -> Any:
+    """Normalize JSON Schema for the Devin endpoint, which rejects
+    anyOf/$defs/'type: null' ("MCP configuration issue"). Collapses the
+    common `anyOf: [T, null]` optional pattern to T and inlines $defs."""
+    if isinstance(node, dict):
+        out = {k: _sanitize_schema(v) for k, v in node.items()}
+        any_of = out.get("anyOf")
+        if isinstance(any_of, list) and len(any_of) == 2:
+            non_null = [b for b in any_of if b.get("type") != "null"]
+            if len(non_null) == 1:
+                merged = dict(non_null[0])
+                for k, v in out.items():
+                    if k != "anyOf":
+                        merged[k] = v
+                return merged
+            out["anyOf"] = [b for b in any_of if b.get("type") != "null"] or any_of
+        return out
+    if isinstance(node, list):
+        return [_sanitize_schema(v) for v in node]
+    return node
+
+
 def _pack_tool(tool: Any) -> bytes:
     declaration = getattr(tool, "function_declarations", None)
     if not declaration: return b""
@@ -77,6 +99,7 @@ def _pack_tool(tool: Any) -> bytes:
             parameters = fn.parameters_json_schema
         else:
             parameters = {}
+        parameters = _sanitize_schema(parameters)
         chunks.append(blob(10, text(1, fn.name or "") + text(2, fn.description or "") + text(3, json.dumps(parameters))))
     return b"".join(chunks)
 

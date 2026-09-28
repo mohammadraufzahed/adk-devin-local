@@ -60,13 +60,19 @@ async def web_fetch(url: str, max_chars: int = 8000) -> dict[str, str]:
     """Fetch a public HTTP(S) URL and extract readable page text; blocks private-network targets."""
     safe = _public_url(url)
     async with httpx.AsyncClient(timeout=25, follow_redirects=False, headers={"User-Agent": "Mozilla/5.0 adk-devin-local"}) as client:
-        response = await client.get(safe)
+        try:
+            response = await client.get(safe)
+        except httpx.HTTPError as exc:
+            return {"error": f"fetch failed: {exc}"}
         if response.is_redirect:
             location=response.headers.get("location", "")
             from urllib.parse import urljoin
             target=_public_url(urljoin(safe, location))
             response=await client.get(target)
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            return {"error": f"HTTP {exc.response.status_code} for {exc.request.url}"}
     text = trafilatura.extract(response.text, include_comments=False, include_tables=False)
     if not text:
         parser = _TextExtractor()
