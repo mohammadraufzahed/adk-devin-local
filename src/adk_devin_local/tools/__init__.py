@@ -75,15 +75,19 @@ def _guarded(fn):
                 return await fn(*args, **kwargs)
             except Exception as exc:  # never kill the run
                 return _err(exc)
-        return awrapper
-
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        try:
-            return fn(*args, **kwargs)
-        except Exception as exc:  # never kill the run
-            return _err(exc)
-    return wrapper
+        wrapped_fn = awrapper
+    else:
+        @functools.wraps(fn)
+        def wrapped_fn(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as exc:  # never kill the run
+                return _err(exc)
+    # Re-expose the bound instance — callers use __self__ to toggle
+    # capability flags (e.g. TelegramTools.allow_mutations).
+    if hasattr(fn, "__self__"):
+        wrapped_fn.__self__ = fn.__self__  # type: ignore[attr-defined]
+    return wrapped_fn
 
 
 def build_tools(workspace: str | Path, groups: list[str] | tuple[str, ...] | None = None, env: dict[str, str] | None = None) -> list[Any]:
